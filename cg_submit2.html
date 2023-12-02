@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>submit2</title>
+    <script src="./file/three.js"></script>
+    <script src="./file/dat.gui.js"></script>
+    <script src="./file/OrbitControls.js"></script>
+    <script type="text/javascript" src="./file/stats.js"></script>
+    <script type="text/javascript" src="./file/helvetiker_regular.typeface.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<script>
+
+    var renderer;
+    var scene;
+    var camera, cubeCamera;
+
+    var control;
+    var orbit;
+
+    var sphere;
+
+
+    function init() {
+
+        scene = new THREE.Scene();
+
+        //カメラを作成
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
+
+        orbit = new THREE.OrbitControls(camera);
+
+        // レンダラーを作成
+        renderer = new THREE.WebGLRenderer();
+        renderer.setClearColor(0x000000, 1.0);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        var textureCube = createCubeMap();
+        textureCube.format = THREE.RGBFormat;
+
+        // シェーダーを作成
+        var shader = THREE.ShaderLib["cube"];
+        shader.uniforms["tCube"].value = textureCube;
+
+        var material = new THREE.ShaderMaterial({
+
+            fragmentShader: shader.fragmentShader,
+            vertexShader: shader.vertexShader,
+            uniforms: shader.uniforms,
+            depthWrite: false,
+            side: THREE.DoubleSide
+
+        });
+
+        // skyboxを作成
+        var skybox = new THREE.Mesh(new THREE.BoxGeometry(10000, 10000, 10000), material);
+        scene.add(skybox);
+
+        cubeCamera = new THREE.CubeCamera(0.1, 20000, 256);
+        scene.add(cubeCamera);
+
+        // 浮かんでいるオブジェクト作成
+        var sphereGeometry = new THREE.SphereGeometry(4, 64, 64);
+        var TorusKnotGeometry1 = new THREE.TorusKnotGeometry( 2.5, 0.9, 300, 20 );
+        var TorusKnotGeometry2 = new THREE.TorusKnotGeometry( 2.5, 0.9, 300, 20 );
+
+        var dynamicEnvMaterial = new THREE.MeshBasicMaterial({envMap: cubeCamera.renderTarget, side: THREE.DoubleSide});
+        var envMaterial = new THREE.MeshBasicMaterial({envMap: textureCube, side: THREE.DoubleSide});
+
+        sphere = new THREE.Mesh(sphereGeometry, dynamicEnvMaterial);
+        sphere.name = 'sphere';
+        scene.add(sphere);
+
+        var TorusKnot2 = new THREE.Mesh(TorusKnotGeometry2, envMaterial);
+        TorusKnot2.name = 'TorusKnot2';
+        scene.add(TorusKnot2);
+        TorusKnot2.position.set(10, 0, 0);
+
+        var TorusKnot1 = new THREE.Mesh(TorusKnotGeometry1, envMaterial);
+        TorusKnot1.name = 'TorusKnot1';
+        scene.add(TorusKnot1);
+        TorusKnot1.position.set(-10, 0, 0);
+
+        // カメラをセット
+        camera.position.x = 0;
+        camera.position.y = 5;
+        camera.position.z = 33;
+        camera.lookAt(scene.position);
+
+        document.body.appendChild(renderer.domElement);
+
+        control = new function () {
+            this.rotationSpeed = 0.005;
+            this.scale = 1;
+        };
+        addControls(control);
+
+        // テキストジオメトリーを作成
+        var step = 0;
+
+        var text1;
+
+        var controls = new function () {
+
+          this.size = 3;
+          this.bevelEnabled = true;
+
+          this.asGeom = function () {
+              scene.remove(text1);
+
+              var options = {
+                  size: controls.size,
+                  height: 0.5,
+                  weight: controls.weight,
+                  font: 'helvetiker',
+                  bevelThickness: 0.2,
+                  bevelSize: 0.1,
+                  bevelSegments: 3,
+                  bevelEnabled: controls.bevelEnabled,
+                  curveSegments: 12,
+                  steps: 1,
+                  color: 0x6f514c
+              };
+
+              console.log(THREE.FontUtils.faces);
+
+              text1 = createMesh(new THREE.TextGeometry("CG 2022", options));
+              text1.position.set(-8, -10, 0);
+              scene.add(text1);
+
+          };
+
+        };
+
+        controls.asGeom();
+
+        function addControls(controlObject) {
+        var gui = new dat.GUI();
+        gui.add(controlObject, 'rotationSpeed', -0.1, 0.1);
+
+        }
+
+        var gui2 = new dat.GUI();
+        gui2.add(controls, 'size', 0, 10).onChange(controls.asGeom);
+        gui2.add(controls, 'bevelEnabled').onChange(controls.asGeom);
+        render();
+
+        function createMesh(geom) {
+
+        var meshMaterial = new THREE.MeshPhongMaterial({
+            specular: 0xffffff,
+            color: 0xeeffff,
+            shininess: 100,
+            metal: true
+        });
+        var plane = THREE.SceneUtils.createMultiMaterialObject(geom, [meshMaterial]);
+
+        return plane;
+        } 
+    }
+
+    
+    
+
+    function createCubeMap() {
+
+        var path = "./env_picture/";
+        var format = '.jpg';
+        var urls = [
+            path + 'posx' + format, path + 'negx' + format,
+            path + 'posy' + format, path + 'negy' + format,
+            path + 'posz' + format, path + 'negz' + format
+        ];
+
+        var textureCube = THREE.ImageUtils.loadTextureCube(urls, new THREE.CubeReflectionMapping());
+        return textureCube;
+    }
+
+    function render() {
+
+        orbit.update();
+
+
+        sphere.visible = false;
+        cubeCamera.updateCubeMap(renderer, scene);
+        sphere.visible = true;
+
+
+        renderer.render(scene, camera);
+        scene.getObjectByName('TorusKnot1').rotation.x += control.rotationSpeed;
+        scene.getObjectByName('TorusKnot1').rotation.y += control.rotationSpeed;
+        scene.getObjectByName('TorusKnot2').rotation.x -= control.rotationSpeed;
+        scene.getObjectByName('TorusKnot2').rotation.y -= control.rotationSpeed;
+
+        requestAnimationFrame(render);
+    }
+
+    window.onload = init;
+
+</script>
+<body>
+</body>
+</html>
